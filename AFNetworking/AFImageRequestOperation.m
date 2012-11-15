@@ -234,4 +234,11 @@ static dispatch_queue_t image_request_operation_processing_queue() {
 #pragma clang diagnostic pop
 }
 
+#pragma mark - NSURLConnectionDelegate
+
+- (NSCachedURLResponse *)connection:(NSURLConnection *)connection
+                  willCacheResponse:(NSCachedURLResponse *)cachedResponse {
+    return nil;
+}
+
 @end

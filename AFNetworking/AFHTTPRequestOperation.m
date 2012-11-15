@@ -338,4 +338,19 @@ didReceiveResponse:(NSURLResponse *)response
     [self.outputStream open];
 }
 
+- (void)connectionDidFinishLoading:(NSURLConnection *)connection {
+    
+    NSData *data = [self.outputStream propertyForKey:NSStreamDataWrittenToMemoryStreamKey];
+    
+    if (data.length == self.totalContentLength) {
+        [super connectionDidFinishLoading:connection];
+        
+    } else {
+        NSError *error = [NSError errorWithDomain:AFNetworkingErrorDomain code:0
+                                         userInfo:@{ NSLocalizedDescriptionKey : @"Did not load the entire data." }];
+        
+        [super connection:connection didFailWithError:error];
+    }
+}
+
 @end
