@@ -342,7 +342,10 @@ didReceiveResponse:(NSURLResponse *)response
     
     NSData *data = [self.outputStream propertyForKey:NSStreamDataWrittenToMemoryStreamKey];
     
-    if (data.length == self.totalContentLength) {
+    NSLog(@"data.length : %d", data.length);
+    NSLog(@"self.totalContentLength : %lld", self.totalContentLength);
+    
+    if (data.length == self.totalContentLength || self.totalContentLength < 0) {
         [super connectionDidFinishLoading:connection];
         
     } else {
