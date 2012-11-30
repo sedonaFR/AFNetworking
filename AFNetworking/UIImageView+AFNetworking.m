@@ -22,6 +22,7 @@
 
 #import <Foundation/Foundation.h>
 #import <objc/runtime.h>
+#import <CommonCrypto/CommonCrypto.h>
 
 #if __IPHONE_OS_VERSION_MIN_REQUIRED
 #import "UIImageView+AFNetworking.h"
@@ -149,11 +150,51 @@ static char kAFImageRequestOperationObjectKey;
 
 #pragma mark -
 
+@implementation NSString (SHA1)
+
+- (NSString*) _afSHA1 {
+    const char *cstr = [self cStringUsingEncoding:NSUTF8StringEncoding];
+    NSData *data = [NSData dataWithBytes:cstr length:self.length];
+    
+    uint8_t digest[CC_SHA1_DIGEST_LENGTH];
+    
+    CC_SHA1(data.bytes, data.length, digest);
+    
+    NSMutableString* output = [NSMutableString stringWithCapacity:CC_SHA1_DIGEST_LENGTH * 2];
+    
+    for(int i = 0; i < CC_SHA1_DIGEST_LENGTH; i++) {
+        [output appendFormat:@"%02x", digest[i]];
+    }
+    
+    return output;
+}
+
+@end
+
 static inline NSString * AFImageCacheKeyFromURLRequest(NSURLRequest *request) {
-    return [[request URL] absoluteString];
+    return [[[request URL] absoluteString] _afSHA1];
 }
 
 @implementation AFImageCache
+
++ (NSString *)cacheDirectory {
+    return [NSTemporaryDirectory() stringByAppendingPathComponent:@"images"];
+}
+
+- (id)init {
+    self = [super init];
+    if (self) {
+        
+        NSFileManager *manager = [NSFileManager defaultManager];
+        if (![manager fileExistsAtPath:[AFImageCache cacheDirectory]]) {
+            
+            [manager createDirectoryAtPath:[AFImageCache cacheDirectory]
+               withIntermediateDirectories:YES attributes:nil error:nil];
+        }
+    }
+    
+    return self;
+}
 
 - (UIImage *)cachedImageForRequest:(NSURLRequest *)request {
     switch ([request cachePolicy]) {
@@ -164,14 +205,35 @@ static inline NSString * AFImageCacheKeyFromURLRequest(NSURLRequest *request) {
             break;
     }
     
-	return [self objectForKey:AFImageCacheKeyFromURLRequest(request)];
+    NSString *key = AFImageCacheKeyFromURLRequest(request);
+    
+	UIImage *image = [self objectForKey:key];
+    if (!image) {
+        
+        // Read from disk
+        
+        NSString *path = [[AFImageCache cacheDirectory] stringByAppendingPathComponent:key];
+        image = [UIImage imageWithContentsOfFile:path];
+    }
+    
+    return image;
 }
 
 - (void)cacheImage:(UIImage *)image
         forRequest:(NSURLRequest *)request
 {
     if (image && request) {
-        [self setObject:image forKey:AFImageCacheKeyFromURLRequest(request)];
+        NSString *key = AFImageCacheKeyFromURLRequest(request);
+        
+        [self setObject:image forKey:key];
+        
+        // Write to disk
+        
+        dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_LOW, 0), ^{
+            
+            NSString *path = [[AFImageCache cacheDirectory] stringByAppendingPathComponent:key];
+            [UIImageJPEGRepresentation(image, 1) writeToFile:path options:NSDataWritingAtomic error:nil];
+        });
     }
 }
 
